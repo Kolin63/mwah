@@ -16,7 +16,7 @@ function stringify_tokens {
   str=""
   while read line; do
     [[ -z "$line" ]] && break
-    str="$str\n$line"
+    str="$str$line"
   done
 
   str="${str//\{b\}/}"
@@ -32,6 +32,11 @@ function stringify_tokens {
   str="${str//\{\/sc\}/}"
   str="${str//\{sup\}/}"
   str="${str//\{\/sup\}/}"
+  str="${str//\{t\}/  }"
+  str="${str//\{d_link|/}"
+  str="${str//\{sx|/}"
+  str="${str//|[a-zA-Z]*\}/}"
+  str="${str//||\}/}"
 
   echo -e "$str"
 }
@@ -57,7 +62,10 @@ if [[ "$1" == "-h" || "$1" == "--help" ]]; then
 fi
 
 word=$1
-json=$(curl https://www.dictionaryapi.com/api/v3/references/collegiate/json/$word?key=$key)
+# json=$(curl https://www.dictionaryapi.com/api/v3/references/collegiate/json/$word?key=$key --silent)
+json=$(cat polish)
+
+echo "$json" | jq
 
 echo "$json" | jq '.[0].meta' &> /dev/null
 if [[ "$?" != "0" ]]; then
@@ -65,22 +73,35 @@ if [[ "$?" != "0" ]]; then
   exit 1
 fi
 
-defs_json=$(echo "$json" | jq '.[0].def[0].sseq')
+pos_amt=$(echo "$json" | jq length)
+echo "pos_amt: $pos_amt"
 
-def_amt=$(echo "$json" | jq length)
+for (( posi=0; posi<$pos_amt; posi++ )); do
+  pos_json=$(echo "$json" | jq ".[$posi].def")
+  type_amt=$(echo "$pos_json" | jq length)
+  echo "type_amt: $type_amt"
 
-for (( defi=0; defi<$def_amt; defi++ )); do
-  def_json=$(echo "$defs_json" | jq ".[$defi]")
-  sub_amt=$(echo "$def_json" | jq length)
+  for (( typei=0; typei<$type_amt; typei++ )); do
+    type_json=$(echo "$pos_json" | jq ".[$typei].sseq")
+    def_amt=$(echo "$type_json" | jq length)
 
-  for (( subi=0; subi<$sub_amt; subi++ )); do
-    sub_json=$(echo "$def_json" | jq ".[$subi]")
+    for (( defi=0; defi<$def_amt; defi++ )); do
+      def_json=$(echo "$type_json" | jq ".[$defi]")
+      sub_amt=$(echo "$def_json" | jq length)
+      echo "sub_amt: $sub_amt"
 
-    if [[ $sub_amt -gt 1 && $subi -eq 0 ]]; then
-      sub_text=$(echo "$sub_json" | jq '.[1].sense.dt[0][1]')
-    else
-      sub_text=$(echo "$sub_json" | jq '.[1].dt[0][1]')
-    fi
-    echo "$sub_text" | stringify_tokens
+      for (( subi=0; subi<$sub_amt; subi++ )); do
+        sub_json=$(echo "$def_json" | jq ".[$subi][0]")
+
+        if [[ $sub_amt -gt 1 && $subi -eq 0 ]]; then
+          sub_text=$(echo "$sub_json" | jq -cr '.[1].sense.dt[0][1]')
+        elif [[ $sub_amt -gt 1 && $subi -gt 0 ]]; then
+          sub_text="{t}$(echo "$sub_json" | jq -cr '.[1].dt[0][1]')"
+        else
+          sub_text=$(echo "$sub_json" | jq -cr '.[1].dt[0][1]')
+        fi
+        echo "$sub_text" | stringify_tokens
+      done
+    done
   done
 done
