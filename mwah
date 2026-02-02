@@ -11,6 +11,31 @@ function print_help {
   echo "        Make sure to place your API key in \$HOME/.local/share/mwah/key"
 }
 
+# reads from stdin
+function stringify_tokens {
+  str=""
+  while read line; do
+    [[ -z "$line" ]] && break
+    str="$str\n$line"
+  done
+
+  str="${str//\{b\}/}"
+  str="${str//\{\/b\}/}"
+  str="${str//\{bc\}/: }"
+  str="${str//\{inf\}/}"
+  str="${str//\{\/inf\}/}"
+  str="${str//\{it\}/}"
+  str="${str//\{\/it\}/}"
+  str="${str//\{ldquo\}/\"}"
+  str="${str//\{rdquo\}/\"}"
+  str="${str//\{sc\}/}"
+  str="${str//\{\/sc\}/}"
+  str="${str//\{sup\}/}"
+  str="${str//\{\/sup\}/}"
+
+  echo -e "$str"
+}
+
 ################################################################################
 # main
 ################################################################################
@@ -40,8 +65,22 @@ if [[ "$?" != "0" ]]; then
   exit 1
 fi
 
-echo "$json" | jq '.[0].def[0].sseq'
+defs_json=$(echo "$json" | jq '.[0].def[0].sseq')
 
 def_amt=$(echo "$json" | jq length)
 
-echo "$def_amt definitons"
+for (( defi=0; defi<$def_amt; defi++ )); do
+  def_json=$(echo "$defs_json" | jq ".[$defi]")
+  sub_amt=$(echo "$def_json" | jq length)
+
+  for (( subi=0; subi<$sub_amt; subi++ )); do
+    sub_json=$(echo "$def_json" | jq ".[$subi]")
+
+    if [[ $sub_amt -gt 1 && $subi -eq 0 ]]; then
+      sub_text=$(echo "$sub_json" | jq '.[1].sense.dt[0][1]')
+    else
+      sub_text=$(echo "$sub_json" | jq '.[1].dt[0][1]')
+    fi
+    echo "$sub_text" | stringify_tokens
+  done
+done
