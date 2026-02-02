@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+
+function print_help {
+  echo "SYNOPSIS"
+  echo "        Usage: mwah <word>"
+  echo ""
+  echo "DESCRIPTION"
+  echo "        mwah is a CLI tool that fetches dictionary definitons from"
+  echo "        Merriam Webster and formats them in a nice way"
+  echo ""
+  echo "        Make sure to place your API key in \$HOME/.local/share/mwah/key"
+}
+
+################################################################################
+# main
+################################################################################
+
+key="$(cat $HOME/.local/share/mwah/key)"
+if [[ -z "$key" ]]; then
+  echo "ERROR: \$HOME/.local/share/mwah/key is empty or does not exist"
+  exit 1
+fi
+
+if [[ -z "$1" ]]; then
+  echo "ERROR: expected exactly one argument"
+  exit 1
+fi
+
+if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+  print_help
+  exit 0
+fi
+
+word=$1
+json=$(curl https://www.dictionaryapi.com/api/v3/references/collegiate/json/$word?key=$key)
+
+echo "$json" | jq '.[0].meta' &> /dev/null
+if [[ "$?" != "0" ]]; then
+  echo "ERROR: unable to find definiton for $word"
+  exit 1
+fi
+
+echo "$json" | jq '.[0].def[0].sseq'
+
+def_amt=$(echo "$json" | jq length)
+
+echo "$def_amt definitons"
